@@ -1,4 +1,4 @@
 *.pkl
 
-algo/
+algo/*.py
 .idea/
