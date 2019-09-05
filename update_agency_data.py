@@ -111,7 +111,7 @@ def update_agency_db(agency_db: defaultdict, agency_volume_meta: pd.DataFrame,
                      agency_volume_detail: pd.DataFrame) -> None:
     def append_new_record(old, new):
         new_records = new.index.difference(old.index)
-        updated = old.append(agency_volume_meta.loc[new_records], sort=False)
+        updated = old.append(new.loc[new_records], sort=False)
         return updated
 
     agency_db[stock_code]['agency_meta'] = append_new_record(agency_db[stock_code]['agency_meta'], agency_volume_meta)

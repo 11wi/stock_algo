@@ -1,4 +1,7 @@
+.idea/
+
+# data files
 *.pkl
 
+# unpublished
 algo/*.py
-.idea/
