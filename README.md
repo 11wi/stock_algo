@@ -16,3 +16,10 @@
 드문드문 소스 확인하고 데이터 수집 이후에 간단한 로직을 만들어보고 괜찮다 싶으면 공유할 생각입니다.
   
 아, 폴더 가운데 `algo`는 algorithm의 줄임말입니다.
+
+`2019-09-28`
+
+데이터 수집을 하다보니 기존 pickle로 저장하는 방식이 cpu 점유율을 올리는 문제가 있었습니다.
+따라서 sqlite 기반의 [sqlitedict](https://anaconda.org/conda-forge/sqlitedict)로 데이터 저장 방법을 변경했습니다.
+
+conda 환경 공유에 필요한 `environment.yml`을 생성하는 명령어를 `conda env export --from-history`로 변경했습니다.

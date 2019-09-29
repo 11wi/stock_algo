@@ -1,10 +1,9 @@
 import os
-import pickle
-from collections import defaultdict
 from random import uniform
 from time import sleep
 
 import pandas as pd
+from sqlitedict import SqliteDict
 from tqdm import tqdm
 
 
@@ -42,7 +41,7 @@ def get_stock_name(stock_code: str):
 
 
 def crawl_delay():
-    _lambda = uniform(2, 20)
+    _lambda = uniform(4, 15)
     time_to_sleep = pd.np.random.poisson(_lambda, 1).item()
     sleep(time_to_sleep)
 
@@ -62,7 +61,7 @@ def crawl_agency_volume(stock_code: str):
             '매수상위': detail_parser('매수상위'),
             '기관매도량': detail_parser('기관매도량'),
             '기관매수량': detail_parser('기관매수량')
-        }, index=[today])
+        }, index=[today.date()])
         agency_volume_detail_.index.name = '날짜'
         return agency_volume_detail_
 
@@ -107,7 +106,7 @@ def crawl_agency_volume(stock_code: str):
     return data_proc_meta(agency_volume_meta), data_proc_detail(agency_volume_detail)
 
 
-def update_agency_db(agency_db: defaultdict, agency_volume_meta: pd.DataFrame,
+def update_agency_db(agency_db: SqliteDict, agency_volume_meta: pd.DataFrame,
                      agency_volume_detail: pd.DataFrame) -> None:
     def append_new_record(old, new):
         new_records = new.index.difference(old.index)
@@ -119,28 +118,31 @@ def update_agency_db(agency_db: defaultdict, agency_volume_meta: pd.DataFrame,
                                                                agency_volume_detail)
 
 
-def get_today() -> pd.Timestamp:
-    now = pd.Timestamp.now()
+def get_businessday() -> pd.Timestamp:
+    now = pd.Timestamp.now().normalize()
     if now.hour <= 4:
-        now = now.normalize() - pd.Timedelta('1 days')
+        now = now - pd.Timedelta('1 days')
+
+    if now.day_name() == 'Saturday':
+        now -= pd.Timedelta('1 day')
+    elif now.day_name() == 'Sunday':
+        now -= pd.Timedelta('2 day')
+
     return now
 
 
 if __name__ == '__main__':
-    agency_db = defaultdict(pd.DataFrame)
-
-    with open(os.path.join('db', 'agency_db.pkl'), 'rb') as file:
-        agency_db = pickle.load(file)
-
+    update_stock_code()
     stock_codes = get_all_code()
-    for stock_code in tqdm(stock_codes):
-        if stock_code not in agency_db:
-            agency_db.update({stock_code: {'agency_meta': pd.DataFrame(), 'agency_detail': pd.DataFrame()}})
-        today = get_today()
-        is_not_duplicated = today not in agency_db[stock_code]['agency_detail'].index
-        if is_not_duplicated:
-            agency_volume_meta, agency_volume_detail = crawl_agency_volume(stock_code)
-            update_agency_db(agency_db, agency_volume_meta, agency_volume_detail)
 
-    with open(os.path.join('db', 'agency_db.pkl'), 'wb') as file:
-        pickle.dump(agency_db, file)
+    with SqliteDict(os.path.join('db', 'agency_db.sqlite')) as agency_db:
+        for stock_code in tqdm(stock_codes):
+            today = get_businessday()
+            if stock_code not in agency_db:
+                agency_db.update({stock_code: {'agency_meta': pd.DataFrame(), 'agency_detail': pd.DataFrame()}})
+
+            is_not_duplicated = today not in agency_db[stock_code]['agency_detail'].index
+            if is_not_duplicated:
+                agency_volume_meta, agency_volume_detail = crawl_agency_volume(stock_code)
+                update_agency_db(agency_db, agency_volume_meta, agency_volume_detail)
+                agency_db.commit()

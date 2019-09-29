@@ -1,0 +1,11 @@
+name: stock_algo
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.7
+  - sqlitedict
+  - pandas
+  - tqdm
+  - lxml
+prefix: /Users/elon/miniconda3/envs/stock_algo
