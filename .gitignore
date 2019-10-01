@@ -2,6 +2,7 @@
 
 # data files
 *.pkl
+*.sqlite
 
 # unpublished
 algo/*.py

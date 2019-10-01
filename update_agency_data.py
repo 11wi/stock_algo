@@ -41,7 +41,7 @@ def get_stock_name(stock_code: str):
 
 
 def crawl_delay():
-    _lambda = uniform(4, 15)
+    _lambda = uniform(2, 6)
     time_to_sleep = pd.np.random.poisson(_lambda, 1).item()
     sleep(time_to_sleep)
 
@@ -61,7 +61,7 @@ def crawl_agency_volume(stock_code: str):
             '매수상위': detail_parser('매수상위'),
             '기관매도량': detail_parser('기관매도량'),
             '기관매수량': detail_parser('기관매수량')
-        }, index=[today.date()])
+        }, index=[today])
         agency_volume_detail_.index.name = '날짜'
         return agency_volume_detail_
 
@@ -83,18 +83,22 @@ def crawl_agency_volume(stock_code: str):
                               .drop(['외국인보유주수', '외국인보유율', '전일비', ], axis=1)
                               .dropna()
                               .applymap(str)
-                              .assign(기관순매매량=lambda df: df['기관순매매량'].str.replace('\+|\,', ''))
-                              .assign(외국인순매매량=lambda df: df['외국인순매매량'].str.replace('\+|\,', ''))
-                              .assign(등락률=lambda df: df['등락률'].str.replace('\+|\%', '')
-                                      .str.replace('∞', '0'))
-                              .astype({'날짜': 'datetime64',
+                              .assign(기관순매매량=lambda df: df['기관순매매량'].str.replace('\+|\,', '')
+        if df['기관순매매량'].dtype.name != 'float64' else df['기관순매매량'])
+                              .assign(외국인순매매량=lambda df: df['외국인순매매량'].str.replace('\+|\,', '')
+        if df['외국인순매매량'].dtype.name != 'float64' else df['외국인순매매량'])
+                              .assign(등락률=lambda df: df['등락률'].str.replace('\+|\%', '').str.replace('∞', '0')
+        if df['외국인순매매량'].dtype.name != 'float64' else df['외국인순매매량'])
+                              .astype({'날짜': 'datetime64[ns]',
                                        '종가': float,
                                        '등락률': float,
                                        '거래량': float,
                                        '기관순매매량': float,
                                        '외국인순매매량': float})
                               .set_index('날짜')
-                              .sort_index())
+                              .sort_index()
+                              .dropna())
+        agency_volume_meta.index = agency_volume_meta.index.date
         return agency_volume_meta
 
     crawl_delay()
@@ -106,20 +110,14 @@ def crawl_agency_volume(stock_code: str):
     return data_proc_meta(agency_volume_meta), data_proc_detail(agency_volume_detail)
 
 
-def update_agency_db(agency_db: SqliteDict, agency_volume_meta: pd.DataFrame,
-                     agency_volume_detail: pd.DataFrame) -> None:
-    def append_new_record(old, new):
-        new_records = new.index.difference(old.index)
-        updated = old.append(new.loc[new_records], sort=False)
-        return updated
-
-    agency_db[stock_code]['agency_meta'] = append_new_record(agency_db[stock_code]['agency_meta'], agency_volume_meta)
-    agency_db[stock_code]['agency_detail'] = append_new_record(agency_db[stock_code]['agency_detail'],
-                                                               agency_volume_detail)
+def update_diff_only(stored: pd.DataFrame, recent_crawled: pd.DataFrame) -> pd.DataFrame:
+    new_records = recent_crawled.index.difference(stored.index)
+    updated = stored.append(recent_crawled.loc[new_records], sort=False)
+    return updated
 
 
 def get_businessday() -> pd.Timestamp:
-    now = pd.Timestamp.now().normalize()
+    now = pd.Timestamp.now()
     if now.hour <= 4:
         now = now - pd.Timedelta('1 days')
 
@@ -128,21 +126,27 @@ def get_businessday() -> pd.Timestamp:
     elif now.day_name() == 'Sunday':
         now -= pd.Timedelta('2 day')
 
-    return now
+    return now.date()
 
 
 if __name__ == '__main__':
     update_stock_code()
     stock_codes = get_all_code()
+    agency_db = SqliteDict(os.path.join('db', 'agency_db.sqlite'), autocommit=True)
 
-    with SqliteDict(os.path.join('db', 'agency_db.sqlite')) as agency_db:
-        for stock_code in tqdm(stock_codes):
-            today = get_businessday()
-            if stock_code not in agency_db:
-                agency_db.update({stock_code: {'agency_meta': pd.DataFrame(), 'agency_detail': pd.DataFrame()}})
+    for stock_code in tqdm(stock_codes):
+        today = get_businessday()
 
-            is_not_duplicated = today not in agency_db[stock_code]['agency_detail'].index
-            if is_not_duplicated:
-                agency_volume_meta, agency_volume_detail = crawl_agency_volume(stock_code)
-                update_agency_db(agency_db, agency_volume_meta, agency_volume_detail)
-                agency_db.commit()
+        if stock_code not in agency_db:
+            agency_db.update({stock_code: {'agency_meta': pd.DataFrame(), 'agency_detail': pd.DataFrame()}})
+
+        is_not_duplicated = today not in agency_db[stock_code]['agency_detail'].index
+        if is_not_duplicated:
+            agency_volume_meta, agency_volume_detail = crawl_agency_volume(stock_code)
+            if not agency_volume_meta.empty:
+                agency_volume_meta_ = update_diff_only(agency_db[stock_code]['agency_meta'], agency_volume_meta)
+                agency_volume_detail_ = update_diff_only(agency_db[stock_code]['agency_detail'], agency_volume_detail)
+                agency_db.update({
+                    stock_code: {'agency_meta': agency_volume_meta_,
+                                 'agency_detail': agency_volume_detail_}
+                })
