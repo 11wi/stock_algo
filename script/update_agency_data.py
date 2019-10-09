@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 from random import uniform
 from time import sleep
 
@@ -17,23 +17,23 @@ def update_stock_code() -> None:
     kosdaq = pd.concat(pd.read_html(url.format('kosdaqMkt'),
                                     header=0, index_col=0, converters={'종목코드': str}))['종목코드']
     stock_codes = kospi.append(kosdaq)
-    stock_codes.to_pickle(os.path.join('meta', 'stock_code.pkl'))
+    stock_codes.to_pickle(Path('..') / 'meta' / 'stock_code.pkl')
 
 
 def get_code(stock_name) -> str:
-    stock_codes = pd.read_pickle(os.path.join('meta', 'stock_code.pkl'))
+    stock_codes = pd.read_pickle(Path('..') / 'meta' / 'stock_code.pkl')
     target_code = stock_codes.loc[stock_name]
     return str(target_code)
 
 
 def get_all_code():
-    stock_codes = pd.read_pickle(os.path.join('meta', 'stock_code.pkl'))
+    stock_codes = pd.read_pickle(Path('..') / 'meta' / 'stock_code.pkl')
     out = stock_codes.astype(str).values
     return out
 
 
 def get_stock_name(stock_code: str):
-    stock_codes = pd.read_pickle(os.path.join('meta', 'stock_code.pkl'))
+    stock_codes = pd.read_pickle(Path('..') / 'meta' / 'stock_code.pkl')
     assert type(stock_code) == str
     target = stock_codes[stock_codes == stock_code].index
     assert target.shape == (1,)
@@ -41,8 +41,8 @@ def get_stock_name(stock_code: str):
 
 
 def crawl_delay():
-    _lambda = uniform(2, 6)
-    time_to_sleep = pd.np.random.poisson(_lambda, 1).item()
+    lambda_ = uniform(1, 3)
+    time_to_sleep = pd.np.random.poisson(lambda_, 1).item()
     sleep(time_to_sleep)
 
 
@@ -132,7 +132,7 @@ def get_businessday() -> pd.Timestamp:
 if __name__ == '__main__':
     update_stock_code()
     stock_codes = get_all_code()
-    agency_db = SqliteDict(os.path.join('db', 'agency_db.sqlite'), autocommit=True)
+    agency_db = SqliteDict(Path('..') / 'db' / 'agency_db.sqlite', autocommit=True)
 
     for stock_code in tqdm(stock_codes):
         today = get_businessday()
