@@ -6,5 +6,6 @@
 
 # unpublished
 algo/*.py
+algo/*.ipynb
 
 crontab

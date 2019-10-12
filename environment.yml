@@ -8,4 +8,5 @@ dependencies:
   - pandas
   - tqdm
   - lxml
+  - ipykernel
 prefix: /Users/elon/miniconda3/envs/stock_algo
